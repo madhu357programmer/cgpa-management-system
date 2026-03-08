@@ -1,0 +1,690 @@
+///home/jinodaya/Desktop/final1/cgpa final/index.html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>CGPA Calculator - Backend Persistent Data</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+body{font-family:system-ui,Arial;background:#f2f5f9;margin:18px}
+table{width:100%;min-width:950px;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden; box-shadow:0 8px 25px rgba(0,0,0,.1);}
+th,td{border:1px solid #ccc;padding:6px;text-align:center;}
+th{background:#eaf0f6;font-weight:600;}
+th.sticky{position:sticky;top:0;background:#f7f7f7}
+input.gpa{width:70px;text-align:center}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}
+input[type=number] {-moz-appearance: textfield;}
+.btn{padding:10px 18px;background:linear-gradient(135deg,#67b0f9,#3d5781);color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,.2); transition:.2s;}
+.btn:hover{ transform:scale(1.05); }
+.btn.gray{ background:#555; }
+.btn.with{background:linear-gradient(135deg,#67b0f9,#3d5781);}
+.btn.without{background:linear-gradient(135deg,#67b0f9,#3d5781);}
+.no-print{margin-bottom:10px}
+.hidden-col{display:none}
+.summary-table th,.summary-table td{border:1px solid #000;padding:4px;text-align:center}
+@media print{
+  .no-print{display:none}
+  .hidden-col{display:none}
+}
+@media (max-width: 768px) {
+  table { font-size: 12px; min-width: 900px; }
+  input.gpa { width: 50px; font-size: 14px; }
+  th, td { padding: 3px; }
+  h2, h3 { font-size: 16px; text-align: center; }
+  .no-print button,
+  .no-print select,
+  .no-print input[type=file] {
+    width: 100%;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+}
+.topHeader{position:relative;background:linear-gradient(135deg,#67b0f9,#3b63a4);color:rgb(218, 219, 228);padding:15px;border-radius:12px;margin-bottom:10px;}
+.collegeLogo{position:absolute;right:20px;top:15px;height:150px;}
+td[id^="cgpa"]{background:#e0f7fa;font-weight:700;color:#006064;}
+.popup-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);display:none;justify-content:center;align-items:center;z-index:20;}
+.popup{background:#fff;padding:20px;border-radius:12px;width:1000px;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+.popup table{width:100%;margin-bottom:10px}
+.popup input,.popup select{width:70px;text-align:center;border-radius:6px;padding:4px}
+.popup h3{text-align:center;margin-top:0}
+body.dark{background:#121212;color:#e0e0e0;}
+body.dark table{background:#1e1e1e;box-shadow:none;}
+body.dark th{background:linear-gradient(135deg,#67b0f9,#3d5781);color:#fff;}
+body.dark td{border-color:#444;}
+body.dark input,
+body.dark select{background:#2a2a2a;color:white;border:1px solid #555;}
+body.dark .btn{background:linear-gradient(135deg,#333,#111);}
+body.dark td[id^="cgpa"]{background:#00363a;color:#80deea;}
+.page{animation:fadeIn .4s ease;}
+@keyframes fadeIn{
+  from{opacity:0; transform:translateY(15px);}
+  to{opacity:1; transform:translateY(0);}
+}
+.credit-popup{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;justify-content:center;align-items:center;z-index:9999;}
+.credit-box{background:#fff;padding:25px;border-radius:10px;width:300px;text-align:center;}
+.credit-box input{width:60px;margin:5px;}
+</style>
+</head>
+
+<body>
+  <script>
+  fetch("http://localhost:3000/auth/check-session", {
+    credentials: "include"
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(!data.loggedIn) window.location.href = "login.html";
+  });
+</script>
+<div class="topHeader">
+<center>
+<h2>Velammal Engineering College</h2>
+<h3>Department of Information Technology</h3>
+<h3 id="batchYear">Batch: 2024-2028</h3>
+</center>
+ <img src="logo.png" class="collegeLogo">
+</div>
+
+<div class="no-print">
+<button class="btn" onclick="setMode('main')">Main Page</button>
+<button class="btn without" onclick="setMode('without')">Without Backlog</button>
+<button class="btn with" onclick="setMode('with')">With Backlog</button>
+<button class="btn gray" onclick="toggleDark()">🌙 Dark Mode</button>
+<button class="btn gray" onclick="checkServerStatus()">🔌 Check Server</button>
+<button class="btn gray" onclick="clearAllData()">🗑️ Clear All Data</button>
+<button class="btn gray" onclick="logout()">🚪 Logout</button>
+</div>
+
+<div class="no-print" id="mainControls">
+<input type="file" id="csvFile" accept=".csv">
+<button class="btn" onclick="editCredits()">Set Semester Credits</button>
+<button id="printBtn" class="btn">Print (only filled columns)</button>
+<select id="yearSelect">
+<option value="1">1st Year</option>
+<option value="2">2nd Year</option>
+<option value="3">3rd Year</option>
+<option value="4">4th Year</option>
+</select>
+<button id="printYearBtn" class="btn">Print Selected Year</button>
+<button id="summaryBtn" class="btn">Print Class Summary</button>
+</div>
+
+<div id="mainPage" class="page" style="overflow:auto">
+  <table id="gpaTable"></table>
+</div>
+
+<div id="withoutPage" class="page" style="display:none;overflow:auto">
+  <table id="gpaTableWithout"></table>
+</div>
+
+<div id="withPage" class="page" style="display:none;overflow:auto">
+  <table id="gpaTableWith"></table>
+</div>
+
+<!-- Arrear Popup -->
+<div class="popup-bg" id="arrearPopup">
+ <div class="popup">
+  <h3>Clear Arrear GPA</h3>
+  <table id="arrearTable">
+   <thead><tr><th>Credit</th><th>Grade</th><th>Remove</th></tr></thead>
+   <tbody></tbody>
+  </table>
+  <button class="btn" onclick="addArrearRow()">Add Subject</button>
+  <button class="btn" onclick="calculateArrearGPA()">Apply GPA</button>
+  <button class="btn gray" onclick="closePopup()">Cancel</button>
+ </div>
+</div>
+
+<script>
+const SEM_COUNT=8;
+let SEM_CREDITS = Array(SEM_COUNT).fill(0);
+const KEY='it_gpa_tracker_v5';
+let students=[];
+let mode='main';
+let table=document.getElementById('gpaTable');
+const GRADE_POINTS={O:10,"A+":9,A:8,"B+":7,B:6,C:5};
+const GRADES=["O","A+","A","B+","B","C"];
+let currentArrearStudent=null,currentArrearSemester=null;
+
+// ================ SERVER CONFIGURATION ================
+const SERVER_URL = 'http://localhost:3000';
+
+// ================ AUTH CHECK ================
+async function checkAuth() {
+  try {
+    const res = await fetch("http://localhost:3000/auth/check-session", {
+      credentials: "include"
+    });
+    const data = await res.json();
+    
+    if (!data.loggedIn) {
+      window.location.href = "mainlogin.html";
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Auth check failed:", error);
+    window.location.href = "mainlogin.html";
+    return false;
+  }
+}
+
+// ================ LOGOUT ================
+async function logout() {
+  try {
+    const res = await fetch("http://localhost:3000/auth/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+    
+    if (res.ok) {
+      window.location.href = "mainlogin.html";
+    }
+  } catch (error) {
+    console.error("Logout failed:", error);
+    window.location.href = "mainlogin.html";
+  }
+}
+
+// ================ PERSISTENCE FUNCTIONS ================
+async function save() {
+  try {
+    console.log("Saving to server...");
+    
+    const batchResponse = await fetch(`${SERVER_URL}/batch/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch: getBatch() })
+    });
+
+    if (!batchResponse.ok) {
+      throw new Error('Failed to create/update batch');
+    }
+
+    const saveResponse = await fetch(`${SERVER_URL}/batch/save/${getBatch()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        students: students,
+        credits: SEM_CREDITS
+      })
+    });
+
+    if (saveResponse.ok) {
+      console.log("Data saved to server successfully!");
+    } else {
+      throw new Error('Failed to save data');
+    }
+    
+    localStorage.setItem(KEY, JSON.stringify({
+      students: students,
+      credits: SEM_CREDITS,
+      batch: getBatch()
+    }));
+    
+  } catch(e) {
+    console.log("Server save failed, saving to localStorage only", e);
+    alert("Could not connect to server. Data saved locally only.");
+    localStorage.setItem(KEY, JSON.stringify({
+      students: students,
+      credits: SEM_CREDITS,
+      batch: getBatch()
+    }));
+  }
+}
+
+async function load() {
+  try {
+    console.log("Attempting to load from server for batch:", getBatch());
+    const response = await fetch(`${SERVER_URL}/batch/load/${getBatch()}`, {
+  credentials: "include"
+});
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log("Server response:", data);
+      
+      if (data.students && data.students.length > 0) {
+        students = data.students || [];
+        SEM_CREDITS = data.credits || Array(SEM_COUNT).fill(0);
+        renderTable();
+        console.log("Data loaded from server successfully!");
+        return true;
+      } else {
+        console.log("No data found on server for this batch");
+        return false;
+      }
+    } else {
+      console.log("Server returned error:", response.status);
+      return false;
+    }
+  } catch (e) {
+    console.log("Could not connect to server. Make sure backend is running on port 3000", e);
+    return false;
+  }
+}
+
+async function checkServerStatus() {
+  try {
+    const response = await fetch(`${SERVER_URL}/batch/test`);
+    if (response.ok) {
+      const data = await response.json();
+      alert(`✅ Server is running!\n${data.message}\nTimestamp: ${data.timestamp}`);
+    } else {
+      alert(`❌ Server returned error: ${response.status}`);
+    }
+  } catch(e) {
+    alert(`❌ Cannot connect to server at ${SERVER_URL}\nMake sure backend is running!`);
+  }
+}
+
+function loadFromLocalStorage() {
+  const saved = localStorage.getItem(KEY);
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      students = data.students || [];
+      SEM_CREDITS = data.credits || Array(SEM_COUNT).fill(0);
+      
+      if (data.batch) {
+        document.getElementById('batchYear').textContent = `Batch: ${data.batch}`;
+      }
+      
+      renderTable();
+      console.log("Data loaded from localStorage backup");
+      return true;
+    } catch(e) {
+      console.log("Error loading from localStorage", e);
+      return false;
+    }
+  }
+  return false;
+}
+
+function clearAllData() {
+  if (confirm("Are you sure you want to clear ALL data from server and localStorage?")) {
+    students = [];
+    SEM_CREDITS = Array(SEM_COUNT).fill(0);
+    renderTable();
+    save();
+    localStorage.removeItem(KEY);
+    alert("All data cleared!");
+  }
+}
+
+// ================ INITIAL LOAD WHEN PAGE OPENS ================
+window.onload = async function() {
+  // Check authentication first
+  const isAuth = await checkAuth();
+  if (!isAuth) return;
+  
+  console.log("Page loaded, loading data from server...");
+  const loaded = await load();
+  
+  if (!loaded) {
+    console.log("No server data, trying localStorage backup...");
+    loadFromLocalStorage();
+  }
+  
+  // Auto-save every 30 seconds as backup
+  setInterval(() => {
+    if (students.length > 0) {
+      save();
+    }
+  }, 30000);
+};
+
+// ================ MODE FUNCTIONS ================
+function setMode(m){
+  mode=m;
+
+  document.getElementById('mainPage').style.display='none';
+  document.getElementById('withoutPage').style.display='none';
+  document.getElementById('withPage').style.display='none';
+
+  if(m==='main'){ 
+    table=document.getElementById('gpaTable'); 
+    let p=document.getElementById('mainPage'); 
+    p.style.display='block'; 
+    p.classList.remove('page'); void p.offsetWidth; p.classList.add('page');
+  }
+
+  if(m==='without'){ 
+    table=document.getElementById('gpaTableWithout'); 
+    let p=document.getElementById('withoutPage'); 
+    p.style.display='block'; 
+    p.classList.remove('page'); void p.offsetWidth; p.classList.add('page');
+  }
+
+  if(m==='with'){ 
+    table=document.getElementById('gpaTableWith'); 
+    let p=document.getElementById('withPage'); 
+    p.style.display='block'; 
+    p.classList.remove('page'); void p.offsetWidth; p.classList.add('page');
+  }
+
+  document.getElementById('mainControls').style.display =
+    (m==='main')?'block':'none';
+
+  renderTable();
+}
+
+// ================ CSV UPLOAD ================
+document.getElementById('csvFile').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const m = file.name.match(/(20\d{2})-(20\d{2})/);
+  if (m) {
+    const batch = `${m[1]}-${m[2]}`;
+    document.getElementById('batchYear').textContent = `Batch: ${batch}`;
+  }
+
+  const r = new FileReader();
+  r.onload = ev => {
+    const rows = ev.target.result
+      .replace(/\r/g,'')
+      .split('\n')
+      .filter(r=>r.trim());
+
+    if (students.length === 0) {
+      students = rows.slice(1).map((l,i)=>{
+        const parts = l.includes(';') ? l.split(';') : l.split(',');
+        const [s, reg, n, sec] = parts;
+
+        return {
+          s_no: +s || i+1,
+          reg_no: reg,
+          name: n,
+          section: sec,
+          gpas: Array(SEM_COUNT).fill(null),
+          arrear: false,
+          class: '',
+          cgpa: ''
+        };
+      });
+      renderTable();
+      save();
+    }
+  };
+  r.readAsText(file);
+};
+
+function hasBacklog(st){
+  return st.arrear;
+}
+
+// ================ RENDER TABLE ================
+function renderTable(){
+  table.innerHTML='';
+  const thead=document.createElement('thead');
+  const tr=document.createElement('tr');
+  ['S.No','Reg No','Name','Section'].forEach(h=>{
+    const th=document.createElement('th'); th.textContent=h; th.className='sticky'; tr.appendChild(th);
+  });
+  for(let s=1;s<=SEM_COUNT;s++){
+    const th=document.createElement('th'); th.textContent='Sem '+s; th.className='sticky'; th.dataset.sem=s; tr.appendChild(th);
+  }
+  ['CGPA','Class','Arrear'].forEach(h=>{
+    const th=document.createElement('th'); th.textContent=h; th.className='sticky'; tr.appendChild(th);
+  });
+  thead.appendChild(tr); table.appendChild(thead);
+
+  const tbody=document.createElement('tbody');
+  students.forEach((st,ri)=>{
+    if(mode==='without' && hasBacklog(st)) return;
+    if(mode==='with' && !hasBacklog(st)) return;
+
+    const row=document.createElement('tr');
+    [st.s_no,st.reg_no,st.name,st.section].forEach(v=>{
+      const td=document.createElement('td'); td.textContent=v; row.appendChild(td);
+    });
+    
+    for(let s=0;s<SEM_COUNT;s++){
+      const td=document.createElement('td');
+
+      if(mode==='main'){
+        const inp=document.createElement('input');
+        inp.type='number';
+        inp.className='gpa';
+        inp.min=0; inp.max=10; inp.step=0.01;
+        inp.value=st.gpas[s]??'';
+        inp.dataset.r=ri; inp.dataset.s=s+1;
+
+        inp.oninput=e=>{
+          const v=parseFloat(e.target.value);
+          if(v>10){ alert('GPA cannot exceed 10'); e.target.value=''; return; }
+          st.gpas[s]=isFinite(v)?v:null;
+          if(v===0) st.arrear=true;
+          updateGrades(ri);
+        };
+        
+        inp.onchange = () => {
+          save();
+        };
+
+        inp.onkeydown = e=>{
+          if(e.key === 'Enter'){
+            e.preventDefault();
+            const next = document.querySelector(`input[data-r='${ri+1}'][data-s='${s+1}']`);
+            if(next) next.focus();
+          }
+        };
+
+        td.appendChild(inp);
+      } else {
+        td.textContent=st.gpas[s]??'';
+      }
+
+      if(st.gpas[s]===0 && mode==='with'){
+        const btn=document.createElement('button');
+        btn.textContent='Clear Arrear';
+        btn.className='btn gray';
+        btn.onclick=()=>openArrearPopup(ri,s);
+        td.appendChild(btn);
+      }
+
+      row.appendChild(td);
+    }
+
+    const tdCg=document.createElement('td'); tdCg.id='cgpa-'+ri; tdCg.textContent=st.cgpa||''; row.appendChild(tdCg);
+    const tdCl=document.createElement('td'); tdCl.id='class-'+ri; tdCl.textContent=st.class||''; row.appendChild(tdCl);
+    const tdAr=document.createElement('td');
+    if(mode==='main'){
+      const chk=document.createElement('input'); chk.type='checkbox'; chk.checked=st.arrear;
+      chk.onchange=e=>{ 
+        st.arrear=e.target.checked; 
+        updateGrades(ri);
+        save();
+      };
+      tdAr.appendChild(chk);
+    } else { tdAr.textContent=hasBacklog(st)?'Yes':'No'; }
+    row.appendChild(tdAr);
+
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+
+  if(mode==='main'){
+    const tfoot=document.createElement('tfoot');
+    const semRow=document.createElement('tr');
+    const lbl=document.createElement('td'); lbl.colSpan=4; lbl.textContent='Class Average (per Semester)'; semRow.appendChild(lbl);
+    for(let i=0;i<SEM_COUNT;i++){
+      const td=document.createElement('td'); td.id='avg-s'+(i+1); semRow.appendChild(td);
+    }
+    semRow.appendChild(document.createElement('td')); semRow.appendChild(document.createElement('td')); semRow.appendChild(document.createElement('td'));
+    tfoot.appendChild(semRow);
+
+    const yearRow=document.createElement('tr');
+    const ylbl=document.createElement('td'); ylbl.colSpan=4; ylbl.textContent='Class Average (per Year)'; yearRow.appendChild(ylbl);
+    for(let i=0;i<SEM_COUNT;i++){
+      const td=document.createElement('td'); td.id='avg-year-s'+(i+1); yearRow.appendChild(td);
+    }
+    yearRow.appendChild(document.createElement('td')); yearRow.appendChild(document.createElement('td')); yearRow.appendChild(document.createElement('td'));
+    tfoot.appendChild(yearRow);
+
+    table.appendChild(tfoot);
+    updateGrades();
+  }
+}
+
+function updateGrades(idx=null){
+  students.forEach((st,i)=>{
+   
+    let pts = 0, cr = 0;
+
+    if (st.gpas.some(g => g === 0)) {
+      st.cgpa = '';
+      st.class = '';
+    } else {
+      st.gpas.forEach((g, j) => {
+        if (g != null) {
+          pts += Math.round(g * SEM_CREDITS[j] * 100) / 100;
+          cr += SEM_CREDITS[j];
+        }
+      });
+      const rawCgpa = pts / cr;
+      const threeDec = Math.floor(rawCgpa * 1000) / 1000;
+      st.cgpa = cr
+        ? (Math.round(threeDec * 100) / 100).toFixed(2)
+        : '';
+    }
+
+    if(st.cgpa){
+      const c=parseFloat(st.cgpa);
+      if(c>8.5 && !hasBacklog(st)) st.class='First Class with Distinction';
+      else if(c>6.5) st.class='First Class';
+      else st.class='Second Class';
+    } else st.class='';
+
+    if(idx===null || idx===i){
+      const cgEl=document.getElementById('cgpa-'+i);
+      if(cgEl) cgEl.textContent=st.cgpa;
+      const clEl=document.getElementById('class-'+i);
+      if(clEl) clEl.textContent=st.class;
+    }
+  });
+
+  for(let i=0;i<SEM_COUNT;i++){
+    const vals=students.map(st=>st.gpas[i]).filter(v=>v!=null && v!==0);
+    const td=document.getElementById('avg-s'+(i+1));
+    if(td) td.textContent=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'';
+  }
+  
+  const yearPairs=[[0,1],[2,3],[4,5],[6,7]];
+  yearPairs.forEach(pair=>{
+    const all=[];
+    students.forEach(st=>{
+      pair.forEach(idx=>{ if(st.gpas[idx]!=null && st.gpas[idx]!==0) all.push(st.gpas[idx]); });
+    });
+    const avg=all.length?(all.reduce((a,b)=>a+b,0)/all.length).toFixed(2):'';
+    const td1=document.getElementById('avg-year-s'+(pair[0]+1));
+    const td2=document.getElementById('avg-year-s'+(pair[1]+1));
+    if(td1) td1.textContent=avg; if(td2) td2.textContent='';
+  });
+}
+
+function getBatch(){
+  return document.getElementById('batchYear')
+    .textContent.replace('Batch: ','');
+}
+
+// ================ PRINT FUNCTIONS ================
+document.getElementById('printBtn').onclick=()=>{
+  for(let s=1;s<=SEM_COUNT;s++){
+    if(!students.some(st=>st.gpas[s-1]!=null))
+      table.querySelectorAll(`[data-sem='${s}']`).forEach(td=>td.classList.add('hidden-col'));
+  }
+  window.print();
+  table.querySelectorAll('.hidden-col').forEach(td=>td.classList.remove('hidden-col'));
+};
+
+document.getElementById('printYearBtn').onclick=()=>{
+  const yr=parseInt(document.getElementById('yearSelect').value);
+  const start=(yr-1)*2+1,end=start+1;
+  for(let s=1;s<=SEM_COUNT;s++){
+    if(s<start||s>end)
+      table.querySelectorAll(`[data-sem='${s}']`).forEach(td=>td.classList.add('hidden-col'));
+  }
+  window.print();
+  table.querySelectorAll('.hidden-col').forEach(td=>td.classList.remove('hidden-col'));
+};
+
+document.getElementById('summaryBtn').onclick=()=>{
+  let d=0,f=0,s=0;
+  students.forEach(st=>{
+    if(st.class==='First Class with Distinction')d++;
+    else if(st.class==='First Class')f++;
+    else if(st.class==='Second Class')s++;
+  });
+  const w=window.open('');
+  w.document.write('<h3>Class Summary</h3>');
+  w.document.write('<table class="summary-table"><tr><th>S.No</th><th>Reg No</th><th>Name</th><th>Class</th></tr>');
+  students.forEach(st=>{
+    w.document.write(`<tr><td>${st.s_no}</td><td>${st.reg_no}</td><td>${st.name}</td><td>${st.class}</td></tr>`);
+  });
+  w.document.write('</table>');
+  w.document.write(`<p>Distinction: ${d}</p><p>First Class: ${f}</p><p>Second Class: ${s}</p>`);
+  w.print(); w.close();
+};
+
+// ================ ARREAR POPUP FUNCTIONS ================
+function openArrearPopup(i,s){
+ currentArrearStudent=i; currentArrearSemester=s;
+ document.querySelector('#arrearTable tbody').innerHTML='';
+ addArrearRow();
+ document.getElementById('arrearPopup').style.display='flex';
+}
+function closePopup(){ document.getElementById('arrearPopup').style.display='none'; }
+
+function addArrearRow(){
+ const tr=document.createElement('tr');
+ const td1=document.createElement('td'); const inp=document.createElement('input');
+ inp.type='number'; inp.min=1; inp.max=4; inp.value=3; td1.appendChild(inp); tr.appendChild(td1);
+ const td2=document.createElement('td'); const sel=document.createElement('select');
+ GRADES.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;sel.appendChild(o);});
+ td2.appendChild(sel); tr.appendChild(td2);
+ const td3=document.createElement('td'); const b=document.createElement('button');
+ b.textContent='X'; b.className='btn gray'; b.onclick=()=>tr.remove(); td3.appendChild(b); tr.appendChild(td3);
+ document.querySelector('#arrearTable tbody').appendChild(tr);
+}
+
+function calculateArrearGPA(){
+ let pts=0,cr=0;
+ for(const r of document.querySelectorAll('#arrearTable tbody tr')){
+  const c=parseInt(r.querySelector('input').value);
+  if(c<1||c>4){ alert('Credit must be between 1 and 4'); return; }
+  const g=GRADE_POINTS[r.querySelector('select').value];
+  pts+=c*g; cr+=c;
+ }
+ const gpa=(pts/cr).toFixed(2);
+ students[currentArrearStudent].gpas[currentArrearSemester]=parseFloat(gpa);
+ updateGrades(currentArrearStudent);
+ save();
+ closePopup();
+}
+
+function toggleDark(){
+ document.body.classList.toggle("dark");
+}
+
+function editCredits() {
+  for (let i = 0; i < SEM_COUNT; i++) {
+    let val = prompt(`Enter credits for Semester ${i+1}:`, SEM_CREDITS[i] || '');
+    if (val === null) return;
+    val = parseInt(val);
+    if (isNaN(val) || val <= 0) {
+      alert("Enter a valid number for credits.");
+      i--;
+    } else {
+      SEM_CREDITS[i] = val;
+    }
+  }
+  save();
+  renderTable();
+  alert("Semester credits updated successfully!");
+}
+</script>
+</body>
+</html>
